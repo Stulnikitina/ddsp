@@ -74,13 +74,6 @@ func NewNodesFinder(h Hasher) NodesFinder {
 	return NodesFinder{Hash_fun: h}
 }
 
-/*func min(a, b int) int {
-	if a <= b {
-		return a
-	}
-	return b
-}*/
-
 // NodesFind returns list of nodes where record with associated key k should be stored.
 // Not more than storage.ReplciationFactor nodes is returned.
 // Returned nodes are choosen from the provided slice of nodes.
