@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 
 	"storage"
+	"sort"
 )
 
 // Hasher is the common interface to compute hash for given k and node.
@@ -63,16 +64,22 @@ func (h *MD5) Hash(k storage.RecordID, node storage.ServiceAddr) uint64 {
 // NodesFinder содержит методы и опции для нахождения узлов,
 // на которых должна храниться запись с данным ключом.
 type NodesFinder struct {
-	// TODO: implement
+	Hash_fun Hasher
 }
 
 // NewNodesFinder creates NodesFinder instance with given Hasher.
 //
 // NewNodesFinder создает NodesFinder с данным Hasher.
 func NewNodesFinder(h Hasher) NodesFinder {
-	// TODO: implement
-	return NodesFinder{}
+	return NodesFinder{Hash_fun: h}
 }
+
+/*func min(a, b int) int {
+	if a <= b {
+		return a
+	}
+	return b
+}*/
 
 // NodesFind returns list of nodes where record with associated key k should be stored.
 // Not more than storage.ReplciationFactor nodes is returned.
@@ -82,6 +89,39 @@ func NewNodesFinder(h Hasher) NodesFinder {
 // Возвращается не больше чем storage.ReplicationFactor nodes.
 // Возвращаемые nodes выбираются из передаваемых nodes.
 func (nf NodesFinder) NodesFind(k storage.RecordID, nodes []storage.ServiceAddr) []storage.ServiceAddr {
-	// TODO: implement
+
+	type node_inf struct {
+		Hash   uint64
+		Adress storage.ServiceAddr
+	}
+
+	var help node_inf
+
+	var Nodes_Hashes []node_inf
+
+	for i:=0; i<len(nodes); i++{
+		help.Hash = nf.Hash_fun.Hash(k,nodes[i])
+		help.Adress = nodes[i]
+		Nodes_Hashes = append(Nodes_Hashes,help)
+		}
+
+	sort.SliceStable(Nodes_Hashes, func(i, j int) bool {
+		if Nodes_Hashes[i].Hash == Nodes_Hashes[j].Hash {
+			return Nodes_Hashes[i].Adress > Nodes_Hashes[j].Adress
+		}
+		return Nodes_Hashes[i].Hash > Nodes_Hashes[j].Hash
+	})
+
+	ar_nodes := make([]storage.ServiceAddr, 0, storage.ReplicationFactor)
+
+	leng := storage.ReplicationFactor
+	if len(Nodes_Hashes) < storage.ReplicationFactor {
+		leng = len(Nodes_Hashes)
+	}
+
+	for i := 0; i < leng; i++ {
+		ar_nodes = append(ar_nodes, Nodes_Hashes[i].Adress)
+	}
+	return ar_nodes
 	return nil
 }
