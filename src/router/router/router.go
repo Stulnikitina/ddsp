@@ -87,11 +87,11 @@ func (r *Router) NodesFind(k storage.RecordID) ([]storage.ServiceAddr, error) {
 	for i := 0; i<len(nodes);i++ {
 
 		r.lock.RLock()
-		defer r.lock.RUnlock()
 
 		if time.Now().Sub(r.Heartbeat_arr[nodes[i]]) < r.conf.ForgetTimeout {
 			ret = append(ret, nodes[i])
 		}
+		r.lock.RUnlock()
 	}
 	if len(ret) < storage.MinRedundancy {
 		return nil, storage.ErrNotEnoughDaemons
