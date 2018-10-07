@@ -1,9 +1,9 @@
 package router
 
 import (
-	"time"
-	"sync"
 	"storage"
+	"sync"
+	"time"
 )
 
 // Config stores configuration for a Router service.
@@ -31,9 +31,9 @@ type Config struct {
 
 // Router is a router service.
 type Router struct {
-	conf    Config
-	Heartbeat_arr map[storage.ServiceAddr] time.Time
-	lock sync.RWMutex
+	conf          Config
+	Heartbeat_arr map[storage.ServiceAddr]time.Time
+	lock          sync.RWMutex
 }
 
 // New creates a new Router with a given cfg.
@@ -51,7 +51,6 @@ func New(cfg Config) (*Router, error) {
 	}
 }
 
-
 // Hearbeat registers node in the router.
 // Returns storage.ErrUnknownDaemon error if node is not served by the Router.
 
@@ -59,7 +58,7 @@ func New(cfg Config) (*Router, error) {
 // Возвращает ошибку storage.ErrUnknownDaemon если node не
 // обслуживается Router.
 func (r *Router) Heartbeat(node storage.ServiceAddr) error {
-	for i:=0;i< len(r.conf.Nodes); i++ {
+	for i := 0; i < len(r.conf.Nodes); i++ {
 		if r.conf.Nodes[i] == node {
 
 			r.lock.Lock()
@@ -72,7 +71,6 @@ func (r *Router) Heartbeat(node storage.ServiceAddr) error {
 	return storage.ErrUnknownDaemon
 }
 
-
 // NodesFind returns a list of available nodes, where record with associated key k
 // should be stored. Returns storage.ErrNotEnoughDaemons error
 // if less then storage.MinRedundancy can be returned.
@@ -84,7 +82,7 @@ func (r *Router) NodesFind(k storage.RecordID) ([]storage.ServiceAddr, error) {
 
 	nodes := r.conf.NodesFinder.NodesFind(k, r.conf.Nodes)
 	ret := make([]storage.ServiceAddr, 0, len(nodes))
-	for i := 0; i<len(nodes);i++ {
+	for i := 0; i < len(nodes); i++ {
 
 		r.lock.RLock()
 

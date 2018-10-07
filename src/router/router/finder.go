@@ -4,8 +4,8 @@ import (
 	"crypto/md5"
 	"encoding/binary"
 
-	"storage"
 	"sort"
+	"storage"
 )
 
 // Hasher is the common interface to compute hash for given k and node.
@@ -92,11 +92,11 @@ func (nf NodesFinder) NodesFind(k storage.RecordID, nodes []storage.ServiceAddr)
 
 	var Nodes_Hashes []node_inf
 
-	for i:=0; i<len(nodes); i++{
-		help.Hash = nf.Hash_fun.Hash(k,nodes[i])
+	for i := 0; i < len(nodes); i++ {
+		help.Hash = nf.Hash_fun.Hash(k, nodes[i])
 		help.Adress = nodes[i]
-		Nodes_Hashes = append(Nodes_Hashes,help)
-		}
+		Nodes_Hashes = append(Nodes_Hashes, help)
+	}
 
 	sort.Slice(Nodes_Hashes, func(i, j int) bool {
 		if Nodes_Hashes[i].Hash == Nodes_Hashes[j].Hash {
