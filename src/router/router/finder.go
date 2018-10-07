@@ -98,7 +98,7 @@ func (nf NodesFinder) NodesFind(k storage.RecordID, nodes []storage.ServiceAddr)
 		Nodes_Hashes = append(Nodes_Hashes,help)
 		}
 
-	sort.SliceStable(Nodes_Hashes, func(i, j int) bool {
+	sort.Slice(Nodes_Hashes, func(i, j int) bool {
 		if Nodes_Hashes[i].Hash == Nodes_Hashes[j].Hash {
 			return Nodes_Hashes[i].Adress > Nodes_Hashes[j].Adress
 		}
