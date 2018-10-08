@@ -31,9 +31,9 @@ type Config struct {
 
 // Router is a router service.
 type Router struct {
-	conf          Config
-	Heartbeat_arr map[storage.ServiceAddr]time.Time
-	lock          sync.RWMutex
+	conf         Config
+	heartbeatarr map[storage.ServiceAddr]time.Time
+	lock         sync.RWMutex
 }
 
 // New creates a new Router with a given cfg.
@@ -44,11 +44,15 @@ type Router struct {
 // Возвращает ошибку storage.ErrNotEnoughDaemons если в cfg.Nodes
 // меньше чем storage.ReplicationFactor nodes.
 func New(cfg Config) (*Router, error) {
+
 	if len(cfg.Nodes) < storage.ReplicationFactor {
 		return nil, storage.ErrNotEnoughDaemons
-	} else {
-		return &Router{conf: cfg, Heartbeat_arr: make(map[storage.ServiceAddr]time.Time)}, nil
 	}
+	ret := Router{conf: cfg, heartbeatarr: make(map[storage.ServiceAddr]time.Time)}
+	for _, node := range cfg.Nodes {
+		ret.heartbeatarr[node] = time.Now()
+	}
+	return &ret, nil
 }
 
 // Hearbeat registers node in the router.
@@ -58,16 +62,15 @@ func New(cfg Config) (*Router, error) {
 // Возвращает ошибку storage.ErrUnknownDaemon если node не
 // обслуживается Router.
 func (r *Router) Heartbeat(node storage.ServiceAddr) error {
-	for i := 0; i < len(r.conf.Nodes); i++ {
-		if r.conf.Nodes[i] == node {
 
-			r.lock.Lock()
-			defer r.lock.Unlock()
+	r.lock.Lock()
+	defer r.lock.Unlock()
 
-			r.Heartbeat_arr[node] = time.Now()
-			return nil
-		}
+	if _, ok := r.heartbeatarr[node]; ok {
+		r.heartbeatarr[node] = time.Now()
+		return nil
 	}
+
 	return storage.ErrUnknownDaemon
 }
 
@@ -86,7 +89,7 @@ func (r *Router) NodesFind(k storage.RecordID) ([]storage.ServiceAddr, error) {
 
 		r.lock.RLock()
 
-		if time.Now().Sub(r.Heartbeat_arr[nodes[i]]) < r.conf.ForgetTimeout {
+		if time.Now().Sub(r.heartbeatarr[nodes[i]]) < r.conf.ForgetTimeout {
 			ret = append(ret, nodes[i])
 		}
 		r.lock.RUnlock()

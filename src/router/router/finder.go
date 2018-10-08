@@ -64,14 +64,14 @@ func (h *MD5) Hash(k storage.RecordID, node storage.ServiceAddr) uint64 {
 // NodesFinder содержит методы и опции для нахождения узлов,
 // на которых должна храниться запись с данным ключом.
 type NodesFinder struct {
-	Hash_fun Hasher
+	Hashfun Hasher
 }
 
 // NewNodesFinder creates NodesFinder instance with given Hasher.
 //
 // NewNodesFinder создает NodesFinder с данным Hasher.
 func NewNodesFinder(h Hasher) NodesFinder {
-	return NodesFinder{Hash_fun: h}
+	return NodesFinder{Hashfun: h}
 }
 
 // NodesFind returns list of nodes where record with associated key k should be stored.
@@ -83,38 +83,38 @@ func NewNodesFinder(h Hasher) NodesFinder {
 // Возвращаемые nodes выбираются из передаваемых nodes.
 func (nf NodesFinder) NodesFind(k storage.RecordID, nodes []storage.ServiceAddr) []storage.ServiceAddr {
 
-	type node_inf struct {
-		Hash   uint64
-		Adress storage.ServiceAddr
+	type nodeinf struct {
+		hash    uint64
+		address storage.ServiceAddr
 	}
 
-	var help node_inf
+	var help nodeinf
 
-	var Nodes_Hashes []node_inf
+	var Hashes []nodeinf
 
 	for i := 0; i < len(nodes); i++ {
-		help.Hash = nf.Hash_fun.Hash(k, nodes[i])
-		help.Adress = nodes[i]
-		Nodes_Hashes = append(Nodes_Hashes, help)
+		help.hash = nf.Hashfun.Hash(k, nodes[i])
+		help.address = nodes[i]
+		Hashes = append(Hashes, help)
 	}
 
-	sort.Slice(Nodes_Hashes, func(i, j int) bool {
-		if Nodes_Hashes[i].Hash == Nodes_Hashes[j].Hash {
-			return Nodes_Hashes[i].Adress > Nodes_Hashes[j].Adress
+	sort.Slice(Hashes, func(i, j int) bool {
+		if Hashes[i].hash == Hashes[j].hash {
+			return Hashes[i].address > Hashes[j].address
 		}
-		return Nodes_Hashes[i].Hash > Nodes_Hashes[j].Hash
+		return Hashes[i].hash > Hashes[j].hash
 	})
 
-	ar_nodes := make([]storage.ServiceAddr, 0, storage.ReplicationFactor)
+	arnodes := make([]storage.ServiceAddr, 0, storage.ReplicationFactor)
 
-	leng := storage.ReplicationFactor
-	if len(Nodes_Hashes) < storage.ReplicationFactor {
-		leng = len(Nodes_Hashes)
+	l := storage.ReplicationFactor
+	if len(Hashes) < storage.ReplicationFactor {
+		l = len(Hashes)
 	}
 
-	for i := 0; i < leng; i++ {
-		ar_nodes = append(ar_nodes, Nodes_Hashes[i].Adress)
+	for i := 0; i < l; i++ {
+		arnodes = append(arnodes, Hashes[i].address)
 	}
-	return ar_nodes
+	return arnodes
 	return nil
 }
