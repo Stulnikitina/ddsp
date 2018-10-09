@@ -83,37 +83,37 @@ func NewNodesFinder(h Hasher) NodesFinder {
 // Возвращаемые nodes выбираются из передаваемых nodes.
 func (nf NodesFinder) NodesFind(k storage.RecordID, nodes []storage.ServiceAddr) []storage.ServiceAddr {
 
-	type nodeinf struct {
+	type nodeInf struct {
 		hash    uint64
 		address storage.ServiceAddr
 	}
 
-	var help nodeinf
+	var help nodeInf
 
-	var Hashes []nodeinf
+	var hashes []nodeInf
 
 	for i := 0; i < len(nodes); i++ {
 		help.hash = nf.Hashfun.Hash(k, nodes[i])
 		help.address = nodes[i]
-		Hashes = append(Hashes, help)
+		hashes = append(hashes, help)
 	}
 
-	sort.Slice(Hashes, func(i, j int) bool {
-		if Hashes[i].hash == Hashes[j].hash {
-			return Hashes[i].address > Hashes[j].address
+	sort.Slice(hashes, func(i, j int) bool {
+		if hashes[i].hash == hashes[j].hash {
+			return hashes[i].address > hashes[j].address
 		}
-		return Hashes[i].hash > Hashes[j].hash
+		return hashes[i].hash > hashes[j].hash
 	})
 
 	arnodes := make([]storage.ServiceAddr, 0, storage.ReplicationFactor)
 
 	l := storage.ReplicationFactor
-	if len(Hashes) < storage.ReplicationFactor {
-		l = len(Hashes)
+	if len(hashes) < storage.ReplicationFactor {
+		l = len(hashes)
 	}
 
 	for i := 0; i < l; i++ {
-		arnodes = append(arnodes, Hashes[i].address)
+		arnodes = append(arnodes, hashes[i].address)
 	}
 	return arnodes
 	return nil
