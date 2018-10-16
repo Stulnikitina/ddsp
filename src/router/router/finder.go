@@ -92,9 +92,9 @@ func (nf NodesFinder) NodesFind(k storage.RecordID, nodes []storage.ServiceAddr)
 
 	var hashes []nodeInf
 
-	for i := 0; i < len(nodes); i++ {
-		help.hash = nf.Hashfun.Hash(k, nodes[i])
-		help.address = nodes[i]
+	for _,node := range nodes {
+		help.hash = nf.Hashfun.Hash(k, node)
+		help.address = node
 		hashes = append(hashes, help)
 	}
 

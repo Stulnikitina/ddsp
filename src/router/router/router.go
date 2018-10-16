@@ -86,11 +86,11 @@ func (r *Router) NodesFind(k storage.RecordID) ([]storage.ServiceAddr, error) {
 	nodes := r.conf.NodesFinder.NodesFind(k, r.conf.Nodes)
 	ret := make([]storage.ServiceAddr, 0, len(nodes))
 	t := time.Now()
-	for i := 0; i < len(nodes); i++ {
+	for _,node := range nodes {
 		r.lock.RLock()
 
-		if t.Sub(r.heartbeat[nodes[i]]) < r.conf.ForgetTimeout {
-			ret = append(ret, nodes[i])
+		if t.Sub(r.heartbeat[node]) < r.conf.ForgetTimeout {
+			ret = append(ret, node)
 		}
 		r.lock.RUnlock()
 	}
