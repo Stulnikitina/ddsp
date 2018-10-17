@@ -1,11 +1,12 @@
 package frontend
 
 import (
+	"router/router"
+	"storage"
+	"sync"
 	"time"
 
 	rclient "router/client"
-	"router/router"
-	"storage"
 )
 
 // InitTimeout is a timeout to wait after unsuccessful List() request to Router.
@@ -38,15 +39,16 @@ type Config struct {
 
 // Frontend is a frontend service.
 type Frontend struct {
-	// TODO: implement
+	conf  Config
+	nodes []storage.ServiceAddr
+	once  sync.Once
 }
 
 // New creates a new Frontend with a given cfg.
 //
 // New создает новый Frontend с данным cfg.
 func New(cfg Config) *Frontend {
-	// TODO: implement
-	return nil
+	return &Frontend{conf: cfg, nodes: nil}
 }
 
 // Put an item to the storage if an item for the given key doesn't exist.
@@ -55,8 +57,49 @@ func New(cfg Config) *Frontend {
 // Put -- добавить запись в хранилище, если запись для данного ключа
 // не существует. Иначе вернуть ошибку.
 func (fe *Frontend) Put(k storage.RecordID, d []byte) error {
-	// TODO: implement
-	return nil
+	nodes, err := fe.conf.RC.NodesFind(fe.conf.Router, k)
+	if err != nil {
+		return err
+	}
+	if len(nodes) < storage.MinRedundancy {
+		return storage.ErrNotEnoughDaemons
+	}
+
+	group := sync.WaitGroup{}
+	group.Add(len(nodes))
+	errs := make(chan error, len(nodes))
+	for _, node := range nodes {
+		go func( node storage.ServiceAddr) {
+			defer group.Done()
+			errs <- fe.conf.NC.Put(node, k, d)
+		}(node)
+	}
+	group.Wait()
+
+	errMap := make(map[error]int)
+	count := 0
+	for range nodes {
+		err := <-errs
+		if err != nil {
+			errMap[err]++
+		} else {
+			count++
+		}
+
+	}
+
+	if count >= storage.MinRedundancy {
+		return nil
+	}
+
+	for err, count := range errMap {
+		if count >= storage.MinRedundancy {
+			return err
+		}
+	}
+
+	return storage.ErrQuorumNotReached
+
 }
 
 // Del an item from the storage if an item exists for the given key.
@@ -65,8 +108,53 @@ func (fe *Frontend) Put(k storage.RecordID, d []byte) error {
 // Del -- удалить запись из хранилища, если запись для данного ключа
 // существует. Иначе вернуть ошибку.
 func (fe *Frontend) Del(k storage.RecordID) error {
-	// TODO: implement
-	return nil
+	nodes, err := fe.conf.RC.NodesFind(fe.conf.Router, k)
+	if err != nil {
+		return err
+	}
+	if len(nodes) < storage.MinRedundancy {
+		return storage.ErrNotEnoughDaemons
+	}
+
+	group := sync.WaitGroup{}
+	group.Add(len(nodes))
+	errs := make(chan error, len(nodes))
+	for _, node := range nodes {
+		go func(node storage.ServiceAddr) {
+			defer group.Done()
+			errs <- fe.conf.NC.Del(node, k)
+		}(node)
+	}
+	group.Wait()
+
+	errMap := make(map[error]int)
+	count := 0
+	for range nodes {
+		err := <-errs
+		if err != nil {
+			errMap[err]++
+		} else {
+			count++
+		}
+
+	}
+
+	if count >= storage.MinRedundancy {
+		return nil
+	}
+
+	for err, count := range errMap {
+		if count >= storage.MinRedundancy {
+			return err
+		}
+	}
+
+	return storage.ErrQuorumNotReached
+}
+
+type datastruct struct {
+	data []byte
+	err  error
 }
 
 // Get an item from the storage if an item exists for the given key.
@@ -75,6 +163,53 @@ func (fe *Frontend) Del(k storage.RecordID) error {
 // Get -- получить запись из хранилища, если запись для данного ключа
 // существует. Иначе вернуть ошибку.
 func (fe *Frontend) Get(k storage.RecordID) ([]byte, error) {
-	// TODO: implement
-	return nil, nil
+	fe.once.Do(func() {
+		for {
+			var err error
+			fe.nodes, err = fe.conf.RC.List(fe.conf.Router)
+			if err == nil {
+				break
+			}
+			time.Sleep(InitTimeout)
+		}
+	})
+
+	nodes := fe.conf.NF.NodesFind(k, fe.nodes)
+	if len(nodes) < storage.MinRedundancy {
+		return nil, storage.ErrNotEnoughDaemons
+	}
+
+	datastr := make(chan datastruct, len(nodes))
+	for _, node := range nodes {
+		go func(node storage.ServiceAddr) {
+			data, err := fe.conf.NC.Get(node, k)
+			datastr <- datastruct{data, err}
+		}(node)
+	}
+
+	dataMap := make(map[string]int)
+	errMap := make(map[error]int)
+	for range nodes {
+		d := <-datastr
+		err := d.err
+		data := d.data
+		if err == nil {
+			dataMap[string(data)]++
+			if dataMap[string(data)] >= storage.MinRedundancy {
+				return data, nil
+			}
+			continue
+		}
+		errMap[err]++
+
+	}
+
+	for err, count := range errMap {
+		if count >= storage.MinRedundancy {
+			return nil, err
+		}
+	}
+
+	return nil, storage.ErrQuorumNotReached
+
 }
