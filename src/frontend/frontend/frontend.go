@@ -1,11 +1,10 @@
 package frontend
 
 import (
-	"router/router"
-	"storage"
 	"sync"
 	"time"
-
+	"router/router"
+	"storage"
 	rclient "router/client"
 )
 
@@ -51,12 +50,7 @@ func New(cfg Config) *Frontend {
 	return &Frontend{conf: cfg, nodes: nil}
 }
 
-// Put an item to the storage if an item for the given key doesn't exist.
-// Returns error otherwise.
-//
-// Put -- добавить запись в хранилище, если запись для данного ключа
-// не существует. Иначе вернуть ошибку.
-func (fe *Frontend) Put(k storage.RecordID, d []byte) error {
+func (fe *Frontend) putDel(k storage.RecordID, job func(node storage.ServiceAddr) error) error {
 	nodes, err := fe.conf.RC.NodesFind(fe.conf.Router, k)
 	if err != nil {
 		return err
@@ -65,16 +59,16 @@ func (fe *Frontend) Put(k storage.RecordID, d []byte) error {
 		return storage.ErrNotEnoughDaemons
 	}
 
-	group := sync.WaitGroup{}
-	group.Add(len(nodes))
+	var wg sync.WaitGroup
+	wg.Add(len(nodes))
 	errs := make(chan error, len(nodes))
 	for _, node := range nodes {
-		go func( node storage.ServiceAddr) {
-			defer group.Done()
-			errs <- fe.conf.NC.Put(node, k, d)
+		go func(node storage.ServiceAddr) {
+			defer wg.Done()
+			errs <- job(node)
 		}(node)
 	}
-	group.Wait()
+	wg.Wait()
 
 	errMap := make(map[error]int)
 	count := 0
@@ -99,7 +93,18 @@ func (fe *Frontend) Put(k storage.RecordID, d []byte) error {
 	}
 
 	return storage.ErrQuorumNotReached
+}
 
+// Put an item to the storage if an item for the given key doesn't exist.
+// Returns error otherwise.
+//
+// Put -- добавить запись в хранилище, если запись для данного ключа
+// не существует. Иначе вернуть ошибку.
+func (fe *Frontend) Put(k storage.RecordID, d []byte) error {
+
+	return fe.putDel(k, func(node storage.ServiceAddr) error {
+		return fe.conf.NC.Put(node, k, d)
+	})
 }
 
 // Del an item from the storage if an item exists for the given key.
@@ -108,53 +113,10 @@ func (fe *Frontend) Put(k storage.RecordID, d []byte) error {
 // Del -- удалить запись из хранилища, если запись для данного ключа
 // существует. Иначе вернуть ошибку.
 func (fe *Frontend) Del(k storage.RecordID) error {
-	nodes, err := fe.conf.RC.NodesFind(fe.conf.Router, k)
-	if err != nil {
-		return err
-	}
-	if len(nodes) < storage.MinRedundancy {
-		return storage.ErrNotEnoughDaemons
-	}
 
-	group := sync.WaitGroup{}
-	group.Add(len(nodes))
-	errs := make(chan error, len(nodes))
-	for _, node := range nodes {
-		go func(node storage.ServiceAddr) {
-			defer group.Done()
-			errs <- fe.conf.NC.Del(node, k)
-		}(node)
-	}
-	group.Wait()
-
-	errMap := make(map[error]int)
-	count := 0
-	for range nodes {
-		err := <-errs
-		if err != nil {
-			errMap[err]++
-		} else {
-			count++
-		}
-
-	}
-
-	if count >= storage.MinRedundancy {
-		return nil
-	}
-
-	for err, count := range errMap {
-		if count >= storage.MinRedundancy {
-			return err
-		}
-	}
-
-	return storage.ErrQuorumNotReached
-}
-
-type datastruct struct {
-	data []byte
-	err  error
+	return fe.putDel(k, func(node storage.ServiceAddr) error {
+		return fe.conf.NC.Del(node, k)
+	})
 }
 
 // Get an item from the storage if an item exists for the given key.
@@ -179,18 +141,23 @@ func (fe *Frontend) Get(k storage.RecordID) ([]byte, error) {
 		return nil, storage.ErrNotEnoughDaemons
 	}
 
-	datastr := make(chan datastruct, len(nodes))
+	type result struct {
+		data []byte
+		err  error
+	}
+
+	datachan := make(chan result, len(nodes))
 	for _, node := range nodes {
 		go func(node storage.ServiceAddr) {
 			data, err := fe.conf.NC.Get(node, k)
-			datastr <- datastruct{data, err}
+			datachan <- result{data, err}
 		}(node)
 	}
 
 	dataMap := make(map[string]int)
 	errMap := make(map[error]int)
 	for range nodes {
-		d := <-datastr
+		d := <-datachan
 		err := d.err
 		data := d.data
 		if err == nil {
@@ -201,13 +168,10 @@ func (fe *Frontend) Get(k storage.RecordID) ([]byte, error) {
 			continue
 		}
 		errMap[err]++
-
-	}
-
-	for err, count := range errMap {
-		if count >= storage.MinRedundancy {
+		if errMap[err] >= storage.MinRedundancy {
 			return nil, err
 		}
+
 	}
 
 	return nil, storage.ErrQuorumNotReached
